@@ -31,8 +31,14 @@ LATERAL VIEW STACK(12,
     'Ene', anomalia_ene, 'Feb', anomalia_feb, 'Mar', anomalia_mar, 'Abr', anomalia_abr,
     'May', anomalia_may, 'Jun', anomalia_jun, 'Jul', anomalia_jul, 'Ago', anomalia_ago,
     'Sep', anomalia_sep, 'Oct', anomalia_oct, 'Nov', anomalia_nov, 'Dic', anomalia_dic
-) AS mes_anom(mes, anomalia_c)
+) AS mes, anomalia_c
 WHERE anomalia_c IS NOT NULL;
+
+-- COMMAND ----------
+
+SELECT * FROM gold.temp_global_mensual
+WHERE anio = 2024 
+ORDER BY mes;
 
 -- COMMAND ----------
 
@@ -76,6 +82,8 @@ GROUP BY temporada, cuenca_desc;
 -- MAGIC 1880, pero OISST y AEMET solo cubren los últimos ~15 años.
 
 -- COMMAND ----------
+
+
 
 CREATE OR REPLACE TABLE gold.resumen_anual
 COMMENT 'Una fila por año cruzando temperatura global, temperatura del mar en España, actividad ciclónica global y clima de España. Tendrá NULLs fuera del rango de cada fuente.'
@@ -144,9 +152,8 @@ WITH normal_historico AS (
     SELECT
         indicativo,
         nombre,
-        ROUND(AVG(precipitacion_mm), 2) AS precipitacion_media_diaria_oct_mm
+        ROUND(AVG(precipitacion_mm), 2) AS precipitacion_media_diaria_mm
     FROM silver.aemet_climatologia_clean
-    WHERE MONTH(fecha) = 10
     GROUP BY indicativo, nombre
 ),
 evento_dana AS (
@@ -157,16 +164,30 @@ evento_dana AS (
         ROUND(MAX(precipitacion_mm), 1) AS precipitacion_maxima_un_dia_mm
     FROM silver.aemet_dana_clean
     GROUP BY indicativo, nombre
-)
+) 
 SELECT
     e.nombre,
     e.precipitacion_total_dana_mm,
     e.precipitacion_maxima_un_dia_mm,
-    n.precipitacion_media_diaria_oct_mm,
-    ROUND(e.precipitacion_maxima_un_dia_mm / NULLIF(n.precipitacion_media_diaria_oct_mm, 0), 1) AS veces_sobre_lo_normal
+    n.precipitacion_media_diaria_mm,
+    ROUND(e.precipitacion_maxima_un_dia_mm / NULLIF(n.precipitacion_media_diaria_mm, 0), 1) AS veces_sobre_lo_normal
 FROM evento_dana e
 JOIN normal_historico n ON e.indicativo = n.indicativo
 ORDER BY veces_sobre_lo_normal DESC;
+
+-- COMMAND ----------
+
+CREATE OR REPLACE TABLE gold.hist_meteo_esp
+COMMENT 'Comparativa de la precipitación del episodio DANA (28 oct - 5 nov 2024) contra la media histórica de octubre en las mismas estaciones.'
+AS
+select fecha, indicativo, nombre, provincia, altitud_m, temp_media_c, temp_min_c, temp_max_c, precipitacion_mm, precipitacion_inapreciable, direccion_viento_cod, viento_media_kmh, viento_racha_kmh, presion_max_hpa, presion_min_hpa, humedad_media_pct, humedad_max_pct, humedad_min_pct, hora_temp_min, hora_temp_max, hora_racha_max, fecha_proceso_datos AS ingest_date  from silver.aemet_climatologia_clean
+UNION
+SELECT fecha, indicativo, nombre, provincia, altitud_m, temp_media_c, temp_min_c, temp_max_c, precipitacion_mm, precipitacion_inapreciable, direccion_viento_cod, viento_media_kmh, viento_racha_kmh, presion_max_hpa, presion_min_hpa, humedad_media_pct, humedad_max_pct, humedad_min_pct, hora_temp_min, hora_temp_max, hora_racha_max, ingest_date FROM silver.aemet_dana_clean
+
+-- COMMAND ----------
+
+SELECT * FROM gold.hist_meteo_esp
+where provincia = 'VALENCIA'
 
 -- COMMAND ----------
 

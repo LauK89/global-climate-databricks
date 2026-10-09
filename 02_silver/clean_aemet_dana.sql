@@ -49,7 +49,8 @@ SELECT
     CASE WHEN horaracha RLIKE '^[0-9]{2}:[0-9]{2}$' THEN horaracha END AS hora_racha_max,
     current_date AS ingest_date
 
-FROM bronze.aemet_dana_raw;
+FROM bronze.aemet_dana_raw
+where provincia= 'VALENCIA';
 
 -- COMMAND ----------
 
